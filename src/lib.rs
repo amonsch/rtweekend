@@ -24,4 +24,56 @@ pub mod lib {
             self.a + self.b * t
         }
     }
+    pub struct HitRecord {
+        pub t: f32,
+        pub p: Vector3<f32>,
+        pub normal: Vector3<f32>,
+    }
+
+    pub trait Hitable {
+        fn hit(&self, ray: &Ray, t_min: f32, t_max: f32) -> Option<HitRecord>;
+    }
+
+    pub struct Sphere {
+        pub center: Vector3<f32>,
+        pub radius: f32,
+    }
+
+    impl Hitable for Sphere {
+        fn hit(&self, ray: &Ray, t_min: f32, t_max: f32) -> Option<HitRecord> {
+            let mut result: Option<HitRecord> = None;
+
+            let oc = ray.origin() - self.center;
+            let a = ray.direction().dot(ray.direction());
+            let b = oc.dot(ray.direction());
+            let c = oc.dot(oc) - self.radius * self.radius;
+            let discriminant = b * b - a * c;
+            if discriminant > 0.0 {
+                let mut temp = (-b - discriminant.sqrt()) / a;
+                if temp < t_max && temp > t_min {
+                    let p = ray.point_at_parameter(temp);
+                    let hit = HitRecord {
+                        t: temp,
+                        p,
+                        normal: (p - self.center) / self.radius,
+                    };
+                    result = Some(hit);
+                }
+
+                temp = (-b + discriminant.sqrt()) / a;
+                if temp < t_max && temp > t_min {
+                    let p = ray.point_at_parameter(temp);
+                    let hit = HitRecord {
+                        t: temp,
+                        p,
+                        normal: (p - self.center) / self.radius,
+                    };
+                    result = Some(hit);
+                }
+            }
+
+            result
+        }
+    }
+
 }
