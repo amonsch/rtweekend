@@ -2,6 +2,7 @@ pub mod lib {
     pub use cgmath::prelude::{ElementWise, InnerSpace};
     pub use cgmath::Vector3;
     use rand;
+    use std::f32;
 
     pub struct Ray {
         pub a: Vector3<f32>,
@@ -87,6 +88,29 @@ pub mod lib {
     }
 
     impl Camera {
+        pub fn new(
+            lookfrom: Vector3<f32>,
+            lookat: Vector3<f32>,
+            vup: Vector3<f32>,
+            vfov: f32,
+            aspect: f32,
+        ) -> Camera {
+            let theta = vfov * f32::consts::PI / 180.0;
+            let half_height = (theta / 2.0).tan();
+            let half_width = aspect * half_height;
+
+            let w = (lookfrom - lookat).normalize();
+            let u = vup.cross(w).normalize();
+            let v = w.cross(u);
+
+            Camera {
+                origin: lookfrom,
+                lower_left_corner: lookfrom - half_width * u - half_height * v - w,
+                horizontal: 2.0 * half_width * u,
+                vertical: 2.0 * half_height * v,
+            }
+        }
+
         pub fn get_ray(&self, u: f32, v: f32) -> Ray {
             Ray {
                 a: self.origin,
