@@ -1,6 +1,7 @@
 pub mod lib {
-    pub use cgmath::prelude::InnerSpace;
+    pub use cgmath::prelude::{ElementWise, InnerSpace};
     pub use cgmath::Vector3;
+    use rand;
 
     pub struct Ray {
         pub a: Vector3<f32>,
@@ -24,10 +25,12 @@ pub mod lib {
             self.a + self.b * t
         }
     }
-    pub struct HitRecord {
+
+    pub struct HitRecord<'a> {
         pub t: f32,
         pub p: Vector3<f32>,
         pub normal: Vector3<f32>,
+        pub material: &'a Box<Material>,
     }
 
     pub trait Hitable {
@@ -37,12 +40,11 @@ pub mod lib {
     pub struct Sphere {
         pub center: Vector3<f32>,
         pub radius: f32,
+        pub material: Box<Material>,
     }
 
     impl Hitable for Sphere {
         fn hit(&self, ray: &Ray, t_min: f32, t_max: f32) -> Option<HitRecord> {
-            let mut result: Option<HitRecord> = None;
-
             let oc = ray.origin() - self.center;
             let a = ray.direction().dot(ray.direction());
             let b = oc.dot(ray.direction());
@@ -51,28 +53,29 @@ pub mod lib {
             if discriminant > 0.0 {
                 let mut temp = (-b - discriminant.sqrt()) / a;
                 if temp < t_max && temp > t_min {
-                    let p = ray.point_at_parameter(temp);
+                    let point = ray.point_at_parameter(temp);
                     let hit = HitRecord {
                         t: temp,
-                        p,
-                        normal: (p - self.center) / self.radius,
+                        p: point,
+                        normal: (point - self.center) / self.radius,
+                        material: &self.material,
                     };
-                    result = Some(hit);
+                    return Some(hit);
                 }
 
                 temp = (-b + discriminant.sqrt()) / a;
                 if temp < t_max && temp > t_min {
-                    let p = ray.point_at_parameter(temp);
+                    let point = ray.point_at_parameter(temp);
                     let hit = HitRecord {
                         t: temp,
-                        p,
-                        normal: (p - self.center) / self.radius,
+                        p: point,
+                        normal: (point - self.center) / self.radius,
+                        material: &self.material,
                     };
-                    result = Some(hit);
+                    return Some(hit);
                 }
             }
-
-            result
+            None
         }
     }
 
@@ -92,4 +95,70 @@ pub mod lib {
         }
     }
 
+    fn random_in_unit_sphere() -> Vector3<f32> {
+        let mut point: Vector3<f32>;
+        loop {
+            point =
+                2.0 * Vector3 {
+                    x: rand::random::<f32>(),
+                    y: rand::random::<f32>(),
+                    z: rand::random::<f32>(),
+                } - Vector3 {
+                    x: 1.0,
+                    y: 1.0,
+                    z: 1.0,
+                };
+
+            if point.magnitude2() >= 1.0 {
+                break;
+            }
+        }
+        point
+    }
+
+    fn reflect(v: Vector3<f32>, n: Vector3<f32>) -> Vector3<f32> {
+        v - 2.0 * v.dot(n) * n
+    }
+
+    pub trait Material {
+        fn scatter(&self, ray: &Ray, record: &HitRecord) -> Option<(Vector3<f32>, Ray)>;
+    }
+
+    pub struct Lambertian {
+        pub albedo: Vector3<f32>,
+    }
+
+    impl Material for Lambertian {
+        fn scatter(&self, _ray: &Ray, record: &HitRecord) -> Option<(Vector3<f32>, Ray)> {
+            // let mut rng = thread_rng();
+            let target = record.p + record.normal + random_in_unit_sphere();
+            let scattered = Ray {
+                a: record.p,
+                b: target - record.p,
+            };
+            if scattered.direction().dot(record.normal) > 0.0 {
+                return Some((self.albedo, scattered));
+            }
+            None
+        }
+    }
+
+    pub struct Metal {
+        pub fuzz: f32,
+        pub albedo: Vector3<f32>,
+    }
+
+    impl Material for Metal {
+        fn scatter(&self, ray: &Ray, record: &HitRecord) -> Option<(Vector3<f32>, Ray)> {
+            let reflected = reflect(ray.direction().normalize(), record.normal);
+            let scattered = Ray {
+                a: record.p,
+                b: reflected + self.fuzz * random_in_unit_sphere(),
+            };
+            if scattered.direction().dot(record.normal) > 0.0 {
+                return Some((self.albedo, scattered));
+            }
+            None
+        }
+    }
 }
