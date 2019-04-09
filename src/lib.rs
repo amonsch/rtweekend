@@ -120,6 +120,23 @@ pub mod lib {
         v - 2.0 * v.dot(n) * n
     }
 
+    fn refract(v: Vector3<f32>, n: Vector3<f32>, ni_over_nt: f32) -> Option<Vector3<f32>> {
+        let uv = v.normalize();
+        let dt = uv.dot(n);
+        let discriminant = 1.0 - ni_over_nt * ni_over_nt * (1.0 - dt * dt);
+        if discriminant > 0.0 {
+            return Some(ni_over_nt * (uv - n * dt) - n * discriminant.sqrt());
+        }
+
+        None
+    }
+
+    fn schlick(cosine: f32, ref_idx: f32) -> f32 {
+        let mut r0 = (1.0 - ref_idx) / (1.0 + ref_idx);
+        r0 *= r0;
+        r0 + (1.0 - r0) * f32::powf(1.0 - cosine, 5.0)
+    }
+
     pub trait Material {
         fn scatter(&self, ray: &Ray, record: &HitRecord) -> Option<(Vector3<f32>, Ray)>;
     }
@@ -159,6 +176,61 @@ pub mod lib {
                 return Some((self.albedo, scattered));
             }
             None
+        }
+    }
+
+    pub struct Dielectric {
+        pub ref_idx: f32,
+    }
+
+    impl PartialEq for Ray {
+        fn eq(&self, other: &Ray) -> bool {
+            self.a == other.a && self.b == other.b
+        }
+    }
+
+    impl Material for Dielectric {
+        fn scatter(&self, ray: &Ray, record: &HitRecord) -> Option<(Vector3<f32>, Ray)> {
+            let ni_over_nt: f32;
+            let outward_normal: Vector3<f32>;
+            let reflected = reflect(ray.direction(), record.normal);
+            let cosine: f32;
+            let angle = ray.direction().dot(record.normal);
+            if angle > 0.0 {
+                outward_normal = -record.normal;
+                ni_over_nt = self.ref_idx;
+                cosine = self.ref_idx * angle / ray.direction().magnitude2();
+            } else {
+                outward_normal = record.normal;
+                ni_over_nt = 1.0 / self.ref_idx;
+                cosine = -angle / ray.direction().magnitude2();
+            }
+
+            let mut scattered: Option<Ray> = None::<Ray>;
+            if let Some(refracted) = refract(ray.direction(), outward_normal, ni_over_nt) {
+                if rand::random::<f32>() < schlick(cosine, self.ref_idx) {
+                    scattered = Some(Ray {
+                        a: record.p,
+                        b: refracted,
+                    });
+                }
+            }
+
+            if scattered == None::<Ray> {
+                scattered = Some(Ray {
+                    a: record.p,
+                    b: reflected,
+                });
+            }
+
+            Some((
+                Vector3 {
+                    x: 1.0,
+                    y: 1.0,
+                    z: 1.0,
+                },
+                scattered.unwrap(),
+            ))
         }
     }
 }
