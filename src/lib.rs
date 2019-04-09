@@ -80,11 +80,36 @@ pub mod lib {
         }
     }
 
+    fn random_in_unit_disk() -> Vector3<f32> {
+        let mut p: Vector3<f32>;
+        loop {
+            p =
+                2.0 * Vector3 {
+                    x: rand::random::<f32>(),
+                    y: rand::random::<f32>(),
+                    z: 0.0,
+                } - Vector3 {
+                    x: 1.0,
+                    y: 1.0,
+                    z: 0.0,
+                };
+
+            if p.dot(p) >= 1.0 {
+                break;
+            }
+        }
+        p
+    }
+
     pub struct Camera {
         pub origin: Vector3<f32>,
         pub lower_left_corner: Vector3<f32>,
         pub horizontal: Vector3<f32>,
         pub vertical: Vector3<f32>,
+        pub u: Vector3<f32>,
+        pub v: Vector3<f32>,
+        pub w: Vector3<f32>,
+        pub lens_radius: f32,
     }
 
     impl Camera {
@@ -94,27 +119,41 @@ pub mod lib {
             vup: Vector3<f32>,
             vfov: f32,
             aspect: f32,
+            aperture: f32,
+            focus_dist: f32,
         ) -> Camera {
             let theta = vfov * f32::consts::PI / 180.0;
             let half_height = (theta / 2.0).tan();
             let half_width = aspect * half_height;
 
+            let origin = lookfrom;
             let w = (lookfrom - lookat).normalize();
             let u = vup.cross(w).normalize();
             let v = w.cross(u);
 
             Camera {
-                origin: lookfrom,
-                lower_left_corner: lookfrom - half_width * u - half_height * v - w,
-                horizontal: 2.0 * half_width * u,
-                vertical: 2.0 * half_height * v,
+                origin,
+                lower_left_corner: origin
+                    - half_width * focus_dist * u
+                    - half_height * focus_dist * v
+                    - focus_dist * w,
+                horizontal: 2.0 * half_width * focus_dist * u,
+                vertical: 2.0 * half_height * focus_dist * v,
+                u,
+                v,
+                w,
+                lens_radius: aperture / 2.0,
             }
         }
 
-        pub fn get_ray(&self, u: f32, v: f32) -> Ray {
+        pub fn get_ray(&self, s: f32, t: f32) -> Ray {
+            let rd = self.lens_radius * random_in_unit_disk();
+            let offset = self.u * rd.x + self.v * rd.y;
             Ray {
-                a: self.origin,
-                b: self.lower_left_corner + u * self.horizontal + v * self.vertical - self.origin,
+                a: self.origin + offset,
+                b: self.lower_left_corner + s * self.horizontal + t * self.vertical
+                    - self.origin
+                    - offset,
             }
         }
     }
